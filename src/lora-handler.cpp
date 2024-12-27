@@ -9,7 +9,7 @@ LoraHandlerClass LoraHandler;
 const double bandwidth_kHz[10] = {7.8E3, 10.4E3, 15.6E3, 20.8E3, 31.25E3,
                             41.7E3, 62.5E3, 125E3, 250E3, 500E3 };
 volatile bool isSending = false;
-void (*receiveCallback)(byte firstByte, byte secondByte) = nullptr;
+void (*receiveCallback)(byte* payload, byte tyte) = nullptr;
 
 void LoraHandlerClass::begin(byte deviceAddress, LoraTransmitConfig config)
 {
@@ -48,12 +48,19 @@ void LoraHandlerClass::receiveMessage(int packetSize)
 
     if (recipient != localAddress) return;
     if (sender != LORA_MASTER_ADDRESS) return;
-    const byte firstByte = LoRa.read();
-    const byte secondByte = LoRa.read();
-    receiveCallback(firstByte, secondByte);
+    byte payload[2];
+    
+    payload[0] = LoRa.read();
+    
+    if (payload[0] & 0b10000000) {
+        receiveCallback(payload, 1);
+        return;
+    }
+    payload[1] = LoRa.read();
+    receiveCallback(payload, 0);
 }
 
-void LoraHandlerClass::onReceive(void (*callback)(byte firstByte, byte secondByte))
+void LoraHandlerClass::onReceive(void (*callback)(byte* payload, byte type))
 {
     receiveCallback = callback;
 }
