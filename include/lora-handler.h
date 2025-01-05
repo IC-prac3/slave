@@ -14,7 +14,7 @@ class LoraHandlerClass {
 public:
     void begin(byte deviceAddress, LoraTransmitConfig config);
     void sendMessage(byte toAddress, byte content);
-    void onReceive(void (*callback)(byte firstByte, byte secondByte));
+    void onReceive(void (*callback)(byte* payload, byte type));
     void setLoraConfig(LoraTransmitConfig config);
 private:
     static void receiveMessage(int packetSize);
