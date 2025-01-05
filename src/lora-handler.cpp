@@ -14,6 +14,7 @@ void (*receiveCallback)(byte* payload, byte tyte) = nullptr;
 void LoraHandlerClass::begin(byte deviceAddress, LoraTransmitConfig config)
 {
     localAddress = deviceAddress;
+
     if (!LoRa.begin(868E6)) {
         digitalWrite(LED_BUILTIN, HIGH);
         while (true);
@@ -23,7 +24,6 @@ void LoraHandlerClass::begin(byte deviceAddress, LoraTransmitConfig config)
     LoRa.setPreambleLength(8);
     LoRa.onTxDone(finishedSending);
     LoRa.onReceive(receiveMessage);
-    LoRa.receive();
 }
 
 void LoraHandlerClass::sendMessage(byte toAddress, byte content)
@@ -32,14 +32,17 @@ void LoraHandlerClass::sendMessage(byte toAddress, byte content)
     while (!LoRa.beginPacket()) {
         delay(10);
     }
+
     LoRa.write(toAddress);
     LoRa.write(localAddress);
     LoRa.write(content);
     LoRa.endPacket(true);
+    SerialUSB.println("Message sent");
 }
 
 void LoraHandlerClass::receiveMessage(int packetSize)
 {
+    SerialUSB.println("Receiving message");
     if (isSending) return;
     if (packetSize == 0) return;
     if (receiveCallback == NULL) return;
@@ -52,12 +55,9 @@ void LoraHandlerClass::receiveMessage(int packetSize)
     
     payload[0] = LoRa.read();
     
-    if (payload[0] & 0b10000000) {
-        receiveCallback(payload, 1);
-        return;
-    }
-    payload[1] = LoRa.read();
-    receiveCallback(payload, 0);
+    byte type = (payload[0] & 0b10000000) >> 7;
+    if (type == 0) payload[1] = LoRa.read();
+    receiveCallback(payload, type);
 }
 
 void LoraHandlerClass::onReceive(void (*callback)(byte* payload, byte type))
@@ -67,10 +67,12 @@ void LoraHandlerClass::onReceive(void (*callback)(byte* payload, byte type))
 
 void LoraHandlerClass::setLoraConfig(LoraTransmitConfig config)
 {
+    //LoRa.end();
     LoRa.setSignalBandwidth(long(bandwidth_kHz[config.bandwidthIndex]));
     LoRa.setSpreadingFactor(config.spreadingFactor);
     LoRa.setCodingRate4(config.codingRate);
     LoRa.setTxPower(config.transmitPower, PA_OUTPUT_PA_BOOST_PIN);
+    LoRa.receive();
 }
 
 void LoraHandlerClass::finishedSending()
