@@ -28,6 +28,7 @@ void LoraHandlerClass::begin(byte deviceAddress, LoraTransmitConfig config)
 
 void LoraHandlerClass::sendMessage(byte toAddress, byte content)
 {
+    if (isSending) return;
     isSending = true;
     while (!LoRa.beginPacket()) {
         delay(10);

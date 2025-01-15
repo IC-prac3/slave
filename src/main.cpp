@@ -20,10 +20,13 @@ volatile byte receivedMessageCount = 0;
 
 volatile long checkConfigTimer = 0;
 volatile bool checkingNewConfig = false;
+volatile u_int32_t lastSendTime_ms = 0;
+volatile u_int32_t waitInterval_ms = 1000;
 
 void receiveMessage(byte* payload, byte type);
 void changeLoraConfig(byte firstByte, byte secondByte);
 void handleConfirmation(byte confirmation);
+bool canSendMessage();
 
 LoraTransmitConfig LORA_CONFIG = {
     .bandwidthIndex = LORA_BANDWIDTH_INDEX,
@@ -57,6 +60,10 @@ void loop() {
 void receiveMessage(byte* payload, byte type)
 {
     if (type == 0) {
+        if (canSendMessage()) {
+            LoraHandler.sendMessage(LORA_MASTER_ADDRESS, 0);
+            lastSendTime_ms = millis();
+        }
         changeLoraConfig(payload[0], payload[1]);
     } else if (type == 1) {
         handleConfirmation(payload[0] & 0b01111111);
@@ -100,7 +107,14 @@ void handleConfirmation(byte messageCount)
 
     if (MAX_MESSAGE_COUNT == messageCount) {
         SerialUSB.println("Sending OK\n");
-        LoraHandler.sendMessage(LORA_MASTER_ADDRESS, 0);
+        if (canSendMessage()) {
+            LoraHandler.sendMessage(LORA_MASTER_ADDRESS, 0);
+            lastSendTime_ms = millis();
+        }
         checkingNewConfig = false;
     }
+}
+
+bool canSendMessage() {
+   return ((millis() - lastSendTime_ms) > waitInterval_ms);
 }
