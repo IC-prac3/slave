@@ -4,9 +4,9 @@
 
 #define LORA_ADDRESS 0x92
 #define LORA_MASTER_ADDRESS 0x93
-#define LORA_BANDWIDTH_INDEX 6   // 0-9 mayor numero es menor tiempo de transmision. 4 bits
-#define LORA_SPREADING_FACTOR 12 // 6-12 mayor numero es mayor tiempo de transmision. 3 bits
-#define LORA_CODING_RATE 8       // 5-8 mayor numero es mayor tiempo de transmision. 2 bits
+#define LORA_BANDWIDTH_INDEX 5   // 0-9 mayor numero es menor tiempo de transmision. 4 bits
+#define LORA_SPREADING_FACTOR 8 // 6-12 mayor numero es mayor tiempo de transmision. 3 bits
+#define LORA_CODING_RATE 6       // 5-8 mayor numero es mayor tiempo de transmision. 2 bits
 #define LORA_TRANSMIT_POWER 2    // 0-14 elegir valor bajo para corto alcance. 5 bits
 
 #define USB_BAUD_RATE 9600
@@ -18,12 +18,15 @@ volatile byte errors = 0;
 volatile byte lastMessageCount = 0;
 volatile byte receivedMessageCount = 0;
 
-volatile long checkConfigTimer = 0;
-volatile bool checkingNewConfig = false;
+volatile float timeOut_ms = INFINITY;
+volatile bool optimized = false;
+volatile bool shouldChangeConfig = false;
+volatile unsigned long lastReceiveMessageTime_ms = 0;
 
 void receiveMessage(byte* payload, byte type);
 void changeLoraConfig(byte firstByte, byte secondByte);
 void handleConfirmation(byte confirmation);
+void checkTimeout();
 
 LoraTransmitConfig LORA_CONFIG = {
     .bandwidthIndex = LORA_BANDWIDTH_INDEX,
@@ -44,18 +47,26 @@ void setup()
 }
 
 void loop() {
-    if (checkingNewConfig) {
-        if (millis() - checkConfigTimer > 8000 && receivedMessageCount < 4) {
-            LORA_CONFIG = LastValidConfig;
-            checkingNewConfig = false;
-            SerialUSB.println("Rollback to last valid config");
-            LoraHandler.setLoraConfig(LORA_CONFIG);
-        }
+    if (!optimized) checkTimeout();
+    if (shouldChangeConfig) {
+        delay(LoraHandler.calculateTransmissionTime(LastValidConfig) * 2000);
+        LoraHandler.setLoraConfig(LORA_CONFIG);
+        shouldChangeConfig = false;
+    }
+}
+
+void checkTimeout() {
+    if (millis() - lastReceiveMessageTime_ms > timeOut_ms) {
+        LORA_CONFIG = LastValidConfig;
+        optimized = true;
+        SerialUSB.println("Rollback to last valid config");
+        LoraHandler.setLoraConfig(LORA_CONFIG);
     }
 }
 
 void receiveMessage(byte* payload, byte type)
 {
+    lastReceiveMessageTime_ms = millis();
     if (type == 0) {
         changeLoraConfig(payload[0], payload[1]);
     } else if (type == 1) {
@@ -76,7 +87,9 @@ void changeLoraConfig(byte firstByte, byte secondByte)
         .transmitPower = transmitPower};
     LastValidConfig = LORA_CONFIG;
     LORA_CONFIG = config;
-    LoraHandler.setLoraConfig(config);
+
+
+    shouldChangeConfig = true;
 
     SerialUSB.println("Setting Lora config to:");
     SerialUSB.print("Bandwidth index: ");
@@ -88,19 +101,19 @@ void changeLoraConfig(byte firstByte, byte secondByte)
     SerialUSB.print("Transmit power: ");
     SerialUSB.println(config.transmitPower);
     SerialUSB.println();
-    checkingNewConfig = true;
-    checkConfigTimer = millis();
+
+    timeOut_ms = LoraHandler.calculateTransmissionTime(LastValidConfig) * 1000 * 200;
+    SerialUSB.print("Estimated transmission time (s): ");
+    SerialUSB.println(LoraHandler.calculateTransmissionTime(LastValidConfig));
+    SerialUSB.print("Timeout (s): ");
+    SerialUSB.println(timeOut_ms / 1000);
+    LoraHandler.sendMessage(LORA_MASTER_ADDRESS, 0);
 }
 
-void handleConfirmation(byte messageCount)
+void handleConfirmation(byte content)
 {
-    SerialUSB.println("Received confirmation");
     SerialUSB.print("Message count: ");
-    SerialUSB.println(messageCount);
-
-    if (MAX_MESSAGE_COUNT == messageCount) {
-        SerialUSB.println("Sending OK\n");
-        LoraHandler.sendMessage(LORA_MASTER_ADDRESS, 0);
-        checkingNewConfig = false;
-    }
+    SerialUSB.println(content);
+    SerialUSB.println("Sending OK");
+    LoraHandler.sendMessage(LORA_MASTER_ADDRESS, content);
 }

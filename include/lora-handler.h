@@ -16,6 +16,7 @@ public:
     void sendMessage(byte toAddress, byte content);
     void onReceive(void (*callback)(byte* payload, byte type));
     void setLoraConfig(LoraTransmitConfig config);
+    float calculateTransmissionTime(LoraTransmitConfig config);
 private:
     static void receiveMessage(int packetSize);
     static void finishedSending();

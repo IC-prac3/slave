@@ -37,7 +37,6 @@ void LoraHandlerClass::sendMessage(byte toAddress, byte content)
     LoRa.write(localAddress);
     LoRa.write(content);
     LoRa.endPacket(true);
-    SerialUSB.println("Message sent");
 }
 
 void LoraHandlerClass::receiveMessage(int packetSize)
@@ -58,6 +57,13 @@ void LoraHandlerClass::receiveMessage(int packetSize)
     byte type = (payload[0] & 0b10000000) >> 7;
     if (type == 0) payload[1] = LoRa.read();
     receiveCallback(payload, type);
+
+}
+
+float LoraHandlerClass::calculateTransmissionTime(LoraTransmitConfig config)
+{
+    int payloadSize = 4;
+    return 8 * payloadSize * (config.codingRate + 4) * pow(2, config.spreadingFactor) / (bandwidth_kHz[config.bandwidthIndex] * config.spreadingFactor);
 }
 
 void LoraHandlerClass::onReceive(void (*callback)(byte* payload, byte type))
@@ -67,7 +73,6 @@ void LoraHandlerClass::onReceive(void (*callback)(byte* payload, byte type))
 
 void LoraHandlerClass::setLoraConfig(LoraTransmitConfig config)
 {
-    //LoRa.end();
     LoRa.setSignalBandwidth(long(bandwidth_kHz[config.bandwidthIndex]));
     LoRa.setSpreadingFactor(config.spreadingFactor);
     LoRa.setCodingRate4(config.codingRate);
@@ -79,4 +84,5 @@ void LoraHandlerClass::finishedSending()
 {
     isSending = false;
     LoRa.receive();
+    SerialUSB.println("Message sent\n");
 }
